@@ -40,8 +40,7 @@ def GetArgs():
                        help='Password to use when connecting to host')
    parser.add_argument('--cluster', dest='clusterName', metavar="CLUSTER",
                       default='VSAN-Cluster')
-   args = parser.parse_args()
-   return args
+   return parser.parse_args()
 
 def getClusterInstance(clusterName, serviceInstance):
    content = serviceInstance.RetrieveContent()
@@ -56,12 +55,9 @@ def getClusterInstance(clusterName, serviceInstance):
 #Start program
 def main():
    args = GetArgs()
-   if args.password:
-      password = args.password
-   else:
-      password = getpass.getpass(prompt='Enter password for host %s and '
-                                        'user %s: ' % (args.host,args.user))
-
+   password = args.password or getpass.getpass(
+       prompt='Enter password for host %s and '
+       'user %s: ' % (args.host, args.user))
    #For python 2.7.9 and later, the defaul SSL conext has more strict
    #connection handshaking rule. We may need turn of the hostname checking
    #and client side cert verification
@@ -88,8 +84,9 @@ def main():
    if aboutInfo.apiType == 'VirtualCenter':
       majorApiVersion = aboutInfo.apiVersion.split('.')[0]
       if int(majorApiVersion) < 6:
-         print('The Virtual Center with version %s (lower than 6.0) is not supported.'
-               % aboutInfo.apiVersion)
+         print(
+             f'The Virtual Center with version {aboutInfo.apiVersion} (lower than 6.0) is not supported.'
+         )
          return -1
 
       #Here is an example of how to access VC side VSAN API
@@ -100,18 +97,18 @@ def main():
       cluster = getClusterInstance(args.clusterName, si)
 
       if cluster is None:
-          print("Cluster %s is not found for %s" % (args.clusterName, args.host))
-          return -1
+         print(f"Cluster {args.clusterName} is not found for {args.host}")
+         return -1
 
       # Retrieve Witness Host for given VSAN Cluster
       witnessHosts = vscs.VSANVcGetWitnessHosts(cluster=cluster)
 
       print("\nVSAN Witness VM for %s" % args.clusterName)
       for withnessHost in witnessHosts:
-        host = (vim.HostSystem(withnessHost.host._moId,si._stub))
-        print("Host: %s" % host.name)
-        print("Node UUID: %s" % withnessHost.nodeUuid)
-        print("Prefer Fault Domain: %s\n" % withnessHost.preferredFdName)
+         host = (vim.HostSystem(withnessHost.host._moId,si._stub))
+         print(f"Host: {host.name}")
+         print(f"Node UUID: {withnessHost.nodeUuid}")
+         print("Prefer Fault Domain: %s\n" % withnessHost.preferredFdName)
 
 # Start program
 if __name__ == "__main__":

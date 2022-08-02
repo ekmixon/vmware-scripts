@@ -44,32 +44,29 @@ def GetArgs():
                         help='Password to use when connecting to host')
     parser.add_argument('-c', '--cluster', dest='clusterName', required=True,
                         action='store')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def get_obj(content, vim_type, name=None):
     obj = None
     container = content.viewManager.CreateContainerView(
         content.rootFolder, vim_type, True)
-    if name:
-        for c in container.view:
-            if c.name == name:
-                obj = c
-                return obj
-    else:
+    if not name:
         return container.view
+    for c in container.view:
+        if c.name == name:
+            obj = c
+            return obj
 
 
 # Start program
 def main():
 
     args = GetArgs()
-    if args.password:
-        password = args.password
-    else:
-        password = getpass.getpass(prompt='Enter password for host %s and '
-                                   'user %s: ' % (args.host, args.user))
+    password = args.password or getpass.getpass(
+        prompt='Enter password for host %s and '
+        'user %s: ' % (args.host, args.user)
+    )
 
     # For python 2.7.9 and later, the defaul SSL conext has more strict
     # connection handshaking rule. We may need turn of the hostname checking
@@ -113,13 +110,9 @@ def main():
         vms = cluster.resourcePool.vm
 
         # Create a map of VM Name to MoRef ID which is returned by vSAN API
-        vmMoRefIdMapping = {}
-        for vm in vms:
-            vmMoRefIdMapping[vm] = vm.name
-
+        vmMoRefIdMapping = {vm: vm.name for vm in vms}
         if cluster is None:
-            print("Cluster %s is not found for %s" % (args.clusterName,
-                  args.host))
+            print(f"Cluster {args.clusterName} is not found for {args.host}")
             return -1
 
         results = vcos.VsanQueryObjectIdentities(cluster=cluster,

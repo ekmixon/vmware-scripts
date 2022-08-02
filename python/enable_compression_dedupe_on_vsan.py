@@ -37,8 +37,7 @@ def GetArgs():
                        help='Password to use when connecting to host')
    parser.add_argument('--cluster', dest='clusterName', metavar="CLUSTER",
                       default='VSAN-Cluster')
-   args = parser.parse_args()
-   return args
+   return parser.parse_args()
 
 def getClusterInstance(clusterName, serviceInstance):
    content = serviceInstance.RetrieveContent()
@@ -53,12 +52,9 @@ def getClusterInstance(clusterName, serviceInstance):
 #Start program
 def main():
    args = GetArgs()
-   if args.password:
-      password = args.password
-   else:
-      password = getpass.getpass(prompt='Enter password for host %s and '
-                                        'user %s: ' % (args.host,args.user))
-
+   password = args.password or getpass.getpass(
+       prompt='Enter password for host %s and '
+       'user %s: ' % (args.host, args.user))
    #For python 2.7.9 and later, the defaul SSL conext has more strict
    #connection handshaking rule. We may need turn of the hostname checking
    #and client side cert verification
@@ -85,8 +81,9 @@ def main():
    if aboutInfo.apiType == 'VirtualCenter':
       majorApiVersion = aboutInfo.apiVersion.split('.')[0]
       if int(majorApiVersion) < 6:
-         print('The Virtual Center with version %s (lower than 6.0) is not supported.'
-               % aboutInfo.apiVersion)
+         print(
+             f'The Virtual Center with version {aboutInfo.apiVersion} (lower than 6.0) is not supported.'
+         )
          return -1
 
       #Here is an example of how to access VC side VSAN Health Service API
@@ -98,14 +95,14 @@ def main():
       cluster = getClusterInstance(args.clusterName, si)
 
       if cluster is None:
-         print("Cluster %s is not found for %s" % (args.clusterName, args.host))
+         print(f"Cluster {args.clusterName} is not found for {args.host}")
          return -1
 
       # Check to see if Automatic Claiming is enabled, if so, we need to disable else we can continue
       vsanCluster = vccs.VsanClusterGetConfig(cluster=cluster)
 
-      if(vsanCluster.defaultConfig.autoClaimStorage == True):
-         print ("Disabling Automatic Claiming on VSAN Cluster: %s" % args.clusterName)
+      if (vsanCluster.defaultConfig.autoClaimStorage == True):
+         print(f"Disabling Automatic Claiming on VSAN Cluster: {args.clusterName}")
          vsanSpec=vim.VimVsanReconfigSpec(
             vsanClusterConfig=vim.VsanClusterConfigInfo (
                defaultConfig=vim.VsanClusterConfigInfoHostDefaultInfo(
@@ -119,21 +116,25 @@ def main():
          vsanapiutils.WaitForTasks([vcTask],si)
 
       # Check to see if Dedupe & Compression is already enabled, if not, then we'll enable it
-      if(vsanCluster.dataEfficiencyConfig.compressionEnabled == False or vsanCluster.dataEfficiencyConfig.dedupEnabled == False):
-          print ("Enabling Compression/Dedupe capability on VSAN Cluster: %s" % args.clusterName)
-          # Create new VSAN Reconfig Spec, both Compression/Dedupe must be enabled together
-          vsanSpec = vim.VimVsanReconfigSpec(
-             dataEfficiencyConfig=vim.VsanDataEfficiencyConfig(
-                compressionEnabled=True,
-                dedupEnabled=True
-             ),
-             modify=True
-          )
-          vsanTask = vccs.VsanClusterReconfig(cluster=cluster,vsanReconfigSpec=vsanSpec)
-          vcTask = vsanapiutils.ConvertVsanTaskToVcTask(vsanTask,si._stub)
-          vsanapiutils.WaitForTasks([vcTask],si)
+      if (vsanCluster.dataEfficiencyConfig.compressionEnabled == False or vsanCluster.dataEfficiencyConfig.dedupEnabled == False):
+         print(
+             f"Enabling Compression/Dedupe capability on VSAN Cluster: {args.clusterName}"
+         )
+         # Create new VSAN Reconfig Spec, both Compression/Dedupe must be enabled together
+         vsanSpec = vim.VimVsanReconfigSpec(
+            dataEfficiencyConfig=vim.VsanDataEfficiencyConfig(
+               compressionEnabled=True,
+               dedupEnabled=True
+            ),
+            modify=True
+         )
+         vsanTask = vccs.VsanClusterReconfig(cluster=cluster,vsanReconfigSpec=vsanSpec)
+         vcTask = vsanapiutils.ConvertVsanTaskToVcTask(vsanTask,si._stub)
+         vsanapiutils.WaitForTasks([vcTask],si)
       else:
-        print ("Compression/Dedupe is already enabled on VSAN Cluster: %s" % args.clusterName)
+         print(
+             f"Compression/Dedupe is already enabled on VSAN Cluster: {args.clusterName}"
+         )
 
 # Start program
 if __name__ == "__main__":

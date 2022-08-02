@@ -68,8 +68,7 @@ def GetArgs():
                         required=False, action='store')
     parser.add_argument('-ep', '--esxPassword', dest='esxPassword',
                         required=False, action='store')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def getESXInstance(serviceInstance):
@@ -78,10 +77,7 @@ def getESXInstance(serviceInstance):
                                                         [vim.HostSystem],
                                                         True)
 
-    for c in container.view:
-        if c is not None:
-            return c
-    return None
+    return next((c for c in container.view if c is not None), None)
 
 
 def trackBootstrapProgress(vvds, progress, taskId):

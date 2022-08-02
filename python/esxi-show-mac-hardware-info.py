@@ -32,9 +32,8 @@ def DisplayFirmwareVersion(versionString):
 
 def GetSmcRevision():
 	s = bytearray(b' VER\6' + 28 * b'\0')
-	fd = open('/vmfs/devices/char/mem/applesmc', 'a+')
-	fcntl.ioctl(fd, 0x4101, s, True)
-	fd.close()
+	with open('/vmfs/devices/char/mem/applesmc', 'a+') as fd:
+		fcntl.ioctl(fd, 0x4101, s, True)
 	if s[32] != 0:
 		raise IOError('Failed: %d' % s[32])
 	return '%x.%x%x%x' % (s[0], s[1], s[2], (s[3] << 16 | s[4] << 8 | s[5]))
@@ -43,6 +42,9 @@ print('\nModel Identifier:', GetModelId())
 print('Serial Number:', GetSerialNumber())
 print('Board ID:', GetBoardId())
 firmwareVer = GetFirmwareVersion()
-print('Boot ROM Version: %s (%s)' % (DisplayFirmwareVersion(firmwareVer), firmwareVer))
+print(
+	f'Boot ROM Version: {DisplayFirmwareVersion(firmwareVer)} ({firmwareVer})'
+)
+
 print('SMC Version:', GetSmcRevision())
 print('\n')

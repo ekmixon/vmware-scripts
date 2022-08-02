@@ -39,39 +39,38 @@ def GetArgs():
    parser.add_argument('-p', '--password', required=True, action='store', help='Password to use when connecting to host')
    parser.add_argument('-c', '--count', required=True, action='store', help='Number of VMs to create')
    parser.add_argument('-d', '--datastore', required=True, action='store', help='Name of Datastore to create VM in')
-   args = parser.parse_args()
-   return args
+   return parser.parse_args()
 
 def getMarvelCharacters(number_of_characters):
-    timestamp = str(int(time.time()))
-    # hash is required as part of request which is md5(timestamp + private + public key)
-    hash_value = hashlib.md5(timestamp + marvel_private_key + marvel_public_key).hexdigest()
+   timestamp = str(int(time.time()))
+   # hash is required as part of request which is md5(timestamp + private + public key)
+   hash_value = hashlib.md5(timestamp + marvel_private_key + marvel_public_key).hexdigest()
 
-    characters = []
-    for x in xrange(number_of_characters):
-        #randomly select one of the 1402 Marvel character
-        offset = random.randrange(1,1402)
-        limit = '1'
+   characters = []
+   limit = '1'
 
+   for _ in xrange(number_of_characters):
+      #randomly select one of the 1402 Marvel character
+      offset = random.randrange(1,1402)
         # GET /v1/public/characters
-        url = 'http://gateway.marvel.com:80/v1/public/characters?limit=' + limit + '&offset=' + str(offset) + '&apikey=' + marvel_public_key + '&ts=' + timestamp + '&hash=' + hash_value
-        headers = {'content-type':'application/json'}
-        request = requests.get(url, headers=headers)
-        data = json.loads(request.content)
-        # retrieve character name & replace spaces with underscore so we don't have stupid spaces in our VM names
-        character = data['data']['results'][0]['name'].strip().replace(' ','_')
-        characters.append(character)
-    return characters
+      url = f'http://gateway.marvel.com:80/v1/public/characters?limit={limit}&offset={offset}&apikey={marvel_public_key}&ts={timestamp}&hash={hash_value}'
+      headers = {'content-type':'application/json'}
+      request = requests.get(url, headers=headers)
+      data = json.loads(request.content)
+      # retrieve character name & replace spaces with underscore so we don't have stupid spaces in our VM names
+      character = data['data']['results'][0]['name'].strip().replace(' ','_')
+      characters.append(character)
+   return characters
 
 def CreateDummyVM(name,si,vmFolder,rp,datastore):
-   vmName = 'MARVEL-' + name
-   datastorePath = '[' + datastore + '] ' + vmName
+   vmName = f'MARVEL-{name}'
+   datastorePath = f'[{datastore}] {vmName}'
 
    # bare minimum VM shell, no disks. Feel free to edit
    file = vim.vm.FileInfo(logDirectory=None,snapshotDirectory=None,suspendDirectory=None,vmPathName=datastorePath)
    config = vim.vm.ConfigSpec(name=vmName, memoryMB=128, numCPUs=1, files=file, guestId='dosGuest', version='vmx-07')
 
-   print "Creating VM " + vmName + " ..."
+   vmName = 'MARVEL-' + name
    task = vmFolder.CreateVM_Task(config=config,pool=rp)
    WaitForTasks([task],si)
 
@@ -113,7 +112,7 @@ def WaitForTasks(tasks, si):
                   else:
                      continue
 
-                  if not str(task) in taskList:
+                  if str(task) not in taskList:
                      continue
 
                   if state == vim.TaskInfo.State.success:

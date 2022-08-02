@@ -43,8 +43,7 @@ def GetArgs():
                         help='Password to use when connecting to host')
     parser.add_argument('-c', '--cluster', dest='clusterName', required=True,
                         action='store')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def getClusterInstance(clusterName, serviceInstance):
@@ -62,11 +61,10 @@ def getClusterInstance(clusterName, serviceInstance):
 def main():
 
     args = GetArgs()
-    if args.password:
-        password = args.password
-    else:
-        password = getpass.getpass(prompt='Enter password for host %s and '
-                                   'user %s: ' % (args.host, args.user))
+    password = args.password or getpass.getpass(
+        prompt='Enter password for host %s and '
+        'user %s: ' % (args.host, args.user)
+    )
 
     # For python 2.7.9 and later, the defaul SSL conext has more strict
     # connection handshaking rule. We may need turn of the hostname checking
@@ -101,14 +99,13 @@ def main():
         cluster = getClusterInstance(args.clusterName, si)
 
         if cluster is None:
-            print("Cluster %s is not found for %s" % (args.clusterName,
-                  args.host))
+            print(f"Cluster {args.clusterName} is not found for {args.host}")
             return -1
 
         smartsData = vchs.VsanQueryVcClusterSmartStatsSummary(cluster=cluster)
 
         for data in smartsData:
-            print("ESXi Host: %s" % data.hostname)
+            print(f"ESXi Host: {data.hostname}")
 
             for smartStat in data.smartStats:
                 print("\nDisk: %s" % smartStat.disk)

@@ -53,8 +53,7 @@ def GetArgs():
                         action='store')
     parser.add_argument('-op', '--operation', dest='operation', required=True,
                         action='store')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def getClusterInstance(clusterName, serviceInstance):
@@ -76,11 +75,10 @@ def isRebalancing(vchs, clusterName):
 def main():
 
     args = GetArgs()
-    if args.password:
-        password = args.password
-    else:
-        password = getpass.getpass(prompt='Enter password for host %s and '
-                                   'user %s: ' % (args.host, args.user))
+    password = args.password or getpass.getpass(
+        prompt='Enter password for host %s and '
+        'user %s: ' % (args.host, args.user)
+    )
 
     # For python 2.7.9 and later, the defaul SSL conext has more strict
     # connection handshaking rule. We may need turn of the hostname checking
@@ -117,8 +115,7 @@ def main():
         cluster = getClusterInstance(args.clusterName, si)
 
         if cluster is None:
-            print("Cluster %s is not found for %s" % (args.clusterName,
-                  args.host))
+            print(f"Cluster {args.clusterName} is not found for {args.host}")
             return -1
 
         if args.operation == "get":
@@ -126,8 +123,7 @@ def main():
             print("%s rebalancing: %s \n" % (args.clusterName, results))
         elif args.operation == "start":
             if not isRebalancing(vchs, cluster):
-                print("Starting rebalancing operation on %s cluster ..."
-                      % args.clusterName)
+                print(f"Starting rebalancing operation on {args.clusterName} cluster ...")
                 vsanTask = vchs.VsanRebalanceCluster(cluster=cluster)
                 vcTask = vsanapiutils.ConvertVsanTaskToVcTask(vsanTask,
                                                               si._stub)
@@ -136,8 +132,7 @@ def main():
                 print("Rebalancing operation is already currently in progress")
         elif args.operation == "stop":
             if isRebalancing(vchs, cluster):
-                print("Stopping rebalancing operation on %s cluster ..."
-                      % args.clusterName)
+                print(f"Stopping rebalancing operation on {args.clusterName} cluster ...")
                 vsanTask = vchs.VsanStopRebalanceCluster(cluster=cluster)
                 vcTask = vsanapiutils.ConvertVsanTaskToVcTask(vsanTask,
                                                               si._stub)

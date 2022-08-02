@@ -35,10 +35,10 @@ def _md5_for_file(f, md5=None, block_size=2**20):
     if md5 is None:
         md5 = hashlib.md5()
     while True:
-        data = f.read(block_size)
-        if not data:
+        if data := f.read(block_size):
+            md5.update(data)
+        else:
             break
-        md5.update(data)
     return md5
 
 
@@ -53,17 +53,17 @@ def _md5_for_folder(folder):
 
 def _make_lib(name, id=uuid.uuid4(), creation=datetime.datetime.now(), version=1):
     return {
-            "vcspVersion": str(VCSP_VERSION),
-            "version": str(version),
-            "contentVersion": "1",
-            "name": name,
-            "id": "urn:uuid:%s" % id,
-            "created": creation.strftime(ISO_FORMAT),
-            "capabilities": {
-            "transferIn": [ "httpGet" ],
-            "transferOut": [ "httpGet" ],
-            },
-        "itemsHref": ITEMS_FILE
+        "vcspVersion": str(VCSP_VERSION),
+        "version": str(version),
+        "contentVersion": "1",
+        "name": name,
+        "id": f"urn:uuid:{id}",
+        "created": creation.strftime(ISO_FORMAT),
+        "capabilities": {
+            "transferIn": ["httpGet"],
+            "transferOut": ["httpGet"],
+        },
+        "itemsHref": ITEMS_FILE,
     }
 
 
@@ -74,10 +74,10 @@ def _make_item(directory, vcsp_type, name, files, description="", properties={},
     add type adapter metadata for OVF template
     '''
     if "urn:uuid:" not in str(identifier):
-        item_id = "urn:uuid:%s" % identifier
+        item_id = f"urn:uuid:{identifier}"
     else:
         item_id = identifier
-    type_metadata = None 
+    type_metadata = None
     if vcsp_type == VCSP_TYPE_OVF:
         # generate sample type metadata for OVF template so that subscriber can show OVF VM type
         type_metadata_value = "{\"id\":\"%s\",\"version\":\"%s\",\"libraryIdParent\":\"%s\",\"isVappTemplate\":\"%s\",\"vmTemplate\":null,\"vappTemplate\":null,\"networks\":[],\"storagePolicyGroups\":null}" % (item_id, str(version), library_id, is_vapp_template)
@@ -98,9 +98,10 @@ def _make_item(directory, vcsp_type, name, files, description="", properties={},
             "name": name,
             "metadata": [type_metadata],
             "properties": properties,
-            "selfHref": "%s/%s" % (directory, ITEM_FILE),
-            "type": vcsp_type
+            "selfHref": f"{directory}/{ITEM_FILE}",
+            "type": vcsp_type,
         }
+
     else:
         return {
             "created": creation.strftime(ISO_FORMAT),
@@ -110,8 +111,8 @@ def _make_item(directory, vcsp_type, name, files, description="", properties={},
             "id": item_id,
             "name": name,
             "properties": properties,
-            "selfHref": "%s/%s" % (directory, ITEM_FILE),
-            "type": vcsp_type
+            "selfHref": f"{directory}/{ITEM_FILE}",
+            "type": vcsp_type,
         } 
 
 
@@ -129,9 +130,7 @@ def _dir2item(path, directory, md5_enabled, lib_id):
     folder_md5 = ""
     is_vapp = ""
     for f in os.listdir(path):
-        if f == ".DS_Store" or f == ''.join((directory, os.extsep, FORMAT)):
-            continue
-        else:
+        if f not in [".DS_Store", ''.join((directory, os.extsep, FORMAT))]:
             if f == "item.json":
                 continue # skip the item.json meta data files
             p = os.path.join(path, f)
@@ -150,7 +149,7 @@ def _dir2item(path, directory, md5_enabled, lib_id):
             elif ".iso" in p:
                 vcsp_type = VCSP_TYPE_ISO
             size = os.path.getsize(p)
-            href = "%s/%s" % (directory, f)
+            href = f"{directory}/{f}"
             h = ""
             if md5_enabled:
                 with open(p, "rb") as handle:
@@ -189,7 +188,7 @@ def _dir2item_s3(s3_client, bucket_name, path, item_name, skip_cert, lib_id, old
     vcsp_type = None
     response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path, Delimiter="/")
 
-    is_vapp = "false" 
+    is_vapp = "false"
     for content in response['Contents']:
         file_path = content['Key']
         if file_path == path or file_path.endswith("item.json"):
@@ -199,14 +198,14 @@ def _dir2item_s3(s3_client, bucket_name, path, item_name, skip_cert, lib_id, old
             vcsp_type = VCSP_TYPE_OVF
             # check if the existing item json already contains "type-metadata" metadata, if not
             # download the OVF file and parse the descriptor for metadata and search for "<VirtualSystemCollection"
-            if  "type-metadata" not in old_item:
+            if "type-metadata" not in old_item:
                 try:
                     s3_ovf_obj = s3_client.get_object(Bucket=bucket_name, Key=file_path)
                     ovf_desc = s3_ovf_obj['Body'].read().decode('utf-8')
                     if "<VirtualSystemCollection" in ovf_desc:
                         is_vapp = "true"
                 except:
-                    logger.error("Failed to read ovf descriptor: %s" % file_path)
+                    logger.error(f"Failed to read ovf descriptor: {file_path}")
         if vcsp_type != VCSP_TYPE_OVF and ".iso" not in file_name:
             vcsp_type = VCSP_TYPE_OTHER
         if vcsp_type not in [VCSP_TYPE_OVF, VCSP_TYPE_OTHER] and ".iso" in file_name:
@@ -215,7 +214,7 @@ def _dir2item_s3(s3_client, bucket_name, path, item_name, skip_cert, lib_id, old
     for content in response['Contents']:
         file_path = content['Key']
         file_name = file_path.split("/")[-1]
-        href = "%s/%s" % (item_name, file_name)
+        href = f"{item_name}/{file_name}"
 
         if file_path == path or file_path.endswith("item.json"):
             continue # skip the item folder and item.json meta data file
@@ -234,14 +233,15 @@ def _dir2item_s3(s3_client, bucket_name, path, item_name, skip_cert, lib_id, old
             extension_index = file_name.rfind('.')
             child_item_name = file_name[:extension_index]
             # note: it is not necessary to create a child iso item folder if not exist
-            item_path = item_name + "/" + child_item_name
+            item_path = f"{item_name}/{child_item_name}"
             items_json[child_item_name] = _make_item(item_path, vcsp_type, child_item_name, [file_json], identifier = uuid.uuid4())
-        else:
-            if vcsp_type == VCSP_TYPE_OVF and file_name.endswith(FILE_EXTENSION_CERT) and skip_cert:
-                # skip adding cert file if skip_cert is true
-                continue
+        elif (
+            vcsp_type != VCSP_TYPE_OVF
+            or not file_name.endswith(FILE_EXTENSION_CERT)
+            or not skip_cert
+        ):
             files_items.append(file_json)
-    
+
     if vcsp_type != VCSP_TYPE_ISO:
         identifier = uuid.uuid4()
         if old_item != "":

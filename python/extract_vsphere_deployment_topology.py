@@ -135,18 +135,31 @@ def build_psc_replication_relationship(pscs):
     return psc_replication_mapping
 
 def find_all_vcenter_servers():
-    vcenter_servers = {}
+   vcenter_servers = {}
 
-    psc_hostname = socket.getfqdn()
-    (proc, out) = lstool_communicate(["list", "--product", "com.vmware.cis", "--type", "vcenterserver", "--ep-type", "com.vmware.vim.extension", "--url", "https://" + psc_hostname + ":7444/lookupservice/sdk"], env=VMTENV)
-    results = out.strip().split('\n')
-    for r in results:
-       line = r.strip()
-       if("com.vmware.vim.vcenter.instanceName:" in line):
-          var,vc = line.split(": ")
-          vcenter_servers[vc] = ""
+   psc_hostname = socket.getfqdn()
+   (proc, out) = lstool_communicate(
+       [
+           "list",
+           "--product",
+           "com.vmware.cis",
+           "--type",
+           "vcenterserver",
+           "--ep-type",
+           "com.vmware.vim.extension",
+           "--url",
+           f"https://{psc_hostname}:7444/lookupservice/sdk",
+       ],
+       env=VMTENV,
+   )
+   results = out.strip().split('\n')
+   for r in results:
+      line = r.strip()
+      if("com.vmware.vim.vcenter.instanceName:" in line):
+         var,vc = line.split(": ")
+         vcenter_servers[vc] = ""
 
-    return vcenter_servers
+   return vcenter_servers
 
 def build_dot_graph(sso_sites,psc_servers,vcenter_servers,psc_to_site,psc_replication_mapping,vcenter_to_psc_mapping):
     # Extract SSO Domain Name
@@ -263,67 +276,62 @@ def _get_java():
       raise Exception("ERROR: VMWARE_JAVA_HOME or JAVA_HOME not set in environment." +
                       " Please set to location of Java runtime and retry.")
 
-   if(os_platform == "vc-windows"):
-      ext = ".exe"
-   else:
-      ext = ""
-   return "%s/bin/java%s" % (java_home, ext)
+   ext = ".exe" if (os_platform == "vc-windows") else ""
+   return f"{java_home}/bin/java{ext}"
 
 def lstool_communicate(argv, ofile=subprocess.PIPE, efile=subprocess.PIPE,
         env=os.environ):
    """
    Lookup service client tool
    """
-   cmd = [_get_java(),
-          "-Djava.security.properties=%s" % _get_java_security_properties(),
-          "-cp",
-          _get_classpath(),
-          "-Dlog4j.configuration=tool-log4j.properties"]
-   cmd.append("com.vmware.vim.lookup.client.tool.LsTool")
+   cmd = [
+       _get_java(),
+       f"-Djava.security.properties={_get_java_security_properties()}",
+       "-cp",
+       _get_classpath(),
+       "-Dlog4j.configuration=tool-log4j.properties",
+       "com.vmware.vim.lookup.client.tool.LsTool",
+   ]
    cmd += argv
    proc = subprocess.Popen(cmd, stdout=ofile, stderr=efile, env=env)
    out, err = proc.communicate()
    return (proc, out)
 
 def main():
-    """
+   """
     Script to extract the deployment topology of your vSphere enviornment (vCenter Server & PSC) and output as DOT Graph
     """
 
-    global os_platform, vc_username,vc_password,vc_username_wo_domain,vc_domain,vc_port
+   global os_platform, vc_username,vc_password,vc_username_wo_domain,vc_domain,vc_port
 
     # Figure out if we're on Windows VC or VCSA
-    if(sys.platform == "win32"):
-	os_platform = "vc-windows"
-    else:
-	os_platform = "vcsa"
+   os_platform = "vc-windows" if (sys.platform == "win32") else "vcsa"
+   args = get_args()
 
-    args = get_args()
+   vc_username = args.user
+   vc_password = args.password
+   vc_username_wo_domain,vc_domain = vc_username.split("@")
+   vc_domain = vc_domain.replace(".local", "")
+   vc_port = int(args.port)
 
-    vc_username = args.user
-    vc_password = args.password
-    vc_username_wo_domain,vc_domain = vc_username.split("@")
-    vc_domain = vc_domain.replace(".local", "")
-    vc_port = int(args.port)
+   # Using vdcrepadmin (https://kb.vmware.com/kb/2127057) to find extract PSC to SSO Site associations
+   psc_to_site,psc_servers,sso_sites = build_psc_to_site_relationship()
 
-    # Using vdcrepadmin (https://kb.vmware.com/kb/2127057) to find extract PSC to SSO Site associations
-    psc_to_site,psc_servers,sso_sites = build_psc_to_site_relationship()
+   # Using vdcrepadmin (https://kb.vmware.com/kb/2127057) to find extract PSC replication information
+   psc_replication_mapping = build_psc_replication_relationship(psc_servers)
 
-    # Using vdcrepadmin (https://kb.vmware.com/kb/2127057) to find extract PSC replication information
-    psc_replication_mapping = build_psc_replication_relationship(psc_servers)
+   # Using lstool.py to extract all vCenter Servers within SSO Domain
+   # (http://www.williamlam.com/2015/04/vcenter-server-6-0-tidbits-part-2-what-is-my-sso-domain-name-site-name.html)
+   # (http://www.williamlam.com/2015/04/vcenter-server-6-0-tidbits-part-4-finding-all-deployed-vcenter-servers.html)
+   vcenter_servers = find_all_vcenter_servers()
 
-    # Using lstool.py to extract all vCenter Servers within SSO Domain
-    # (http://www.williamlam.com/2015/04/vcenter-server-6-0-tidbits-part-2-what-is-my-sso-domain-name-site-name.html)
-    # (http://www.williamlam.com/2015/04/vcenter-server-6-0-tidbits-part-4-finding-all-deployed-vcenter-servers.html)
-    vcenter_servers = find_all_vcenter_servers()
+   # Using pyvmomi to connect to vSphere API to extract PSC Server used by given vCenter Server
+   vcenter_to_psc_mapping = build_vcenter_to_psc_relationship(vcenter_servers)
 
-    # Using pyvmomi to connect to vSphere API to extract PSC Server used by given vCenter Server
-    vcenter_to_psc_mapping = build_vcenter_to_psc_relationship(vcenter_servers)
+   # Building DOT Graph of VC/PSC deployment topology (ugly code right now, but limited due to excuting env)
+   build_dot_graph(sso_sites,psc_servers,vcenter_servers,psc_to_site,psc_replication_mapping,vcenter_to_psc_mapping)
 
-    # Building DOT Graph of VC/PSC deployment topology (ugly code right now, but limited due to excuting env)
-    build_dot_graph(sso_sites,psc_servers,vcenter_servers,psc_to_site,psc_replication_mapping,vcenter_to_psc_mapping)
-
-    return 0
+   return 0
 
 # Start program
 if __name__ == "__main__":

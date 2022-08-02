@@ -27,10 +27,10 @@ def _md5_for_file(f, md5=None, block_size=2**20):
     if md5 is None:
         md5 = hashlib.md5()
     while True:
-        data = f.read(block_size)
-        if not data:
+        if data := f.read(block_size):
+            md5.update(data)
+        else:
             break
-        md5.update(data)
     return md5
 
 
@@ -45,17 +45,17 @@ def _md5_for_folder(folder):
 
 def _make_lib(name, id=uuid.uuid4(), creation=datetime.now(), version=1):
     return {
-            "vcspVersion": str(VCSP_VERSION),
-            "version": str(version),
-            "contentVersion": "1",
-            "name": name,
-            "id": "urn:uuid:%s" % id,
-            "created": creation.strftime(ISO_FORMAT),
-            "capabilities": {
-            "transferIn": [ "httpGet" ],
-            "transferOut": [ "httpGet" ],
-            },
-        "itemsHref": ITEMS_FILE
+        "vcspVersion": str(VCSP_VERSION),
+        "version": str(version),
+        "contentVersion": "1",
+        "name": name,
+        "id": f"urn:uuid:{id}",
+        "created": creation.strftime(ISO_FORMAT),
+        "capabilities": {
+            "transferIn": ["httpGet"],
+            "transferOut": ["httpGet"],
+        },
+        "itemsHref": ITEMS_FILE,
     }
 
 
@@ -66,11 +66,11 @@ def _make_item(directory, vcsp_type, name, files, description="", properties={},
         "description": description,
         "version": str(version),
         "files": files,
-        "id": "urn:uuid:%s" % identifier,
+        "id": f"urn:uuid:{identifier}",
         "name": name,
         "properties": properties,
-        "selfHref": "%s/%s" % (directory, ITEM_FILE),
-        "type": vcsp_type
+        "selfHref": f"{directory}/{ITEM_FILE}",
+        "type": vcsp_type,
     }
 
 
@@ -87,9 +87,7 @@ def _dir2item(path, directory, md5_enabled):
     folder = ""
     folder_md5 = ""
     for f in os.listdir(path):
-        if f == ".DS_Store" or f == ''.join((directory, os.extsep, FORMAT)):
-            continue
-        else:
+        if f not in [".DS_Store", ''.join((directory, os.extsep, FORMAT))]:
             if f == "item.json":
                 continue # skip the item.json meta data files
             p = os.path.join(path, f)
@@ -104,7 +102,7 @@ def _dir2item(path, directory, md5_enabled):
             if ".ovf" in p:
                 vcsp_type = "vcsp.ovf"
             size = os.path.getsize(p)
-            href = "%s/%s" % (directory, f)
+            href = f"{directory}/{f}"
             h = ""
             if md5_enabled:
                 with open(p, "rb") as handle:
